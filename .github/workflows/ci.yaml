@@ -16,19 +16,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build docker containers
-        uses: docker/bake-action@v3
+      - name: Login to Yandex Cloud Container Registry
+        id: login-cr
+        uses: yc-actions/yc-cr-login@v1
         with:
-          load: true
+          yc-sa-json-credentials: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
 
-      - name: Backend test
-        run: docker compose run backend-test
+      - name: Build, tag, and push image to Yandex Cloud Container Registry [Frontend]
+        env:
+          CR_REGISTRY: crpqppq44fvldj2f1brc
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          DESTINATION=cr.yandex/$CR_REGISTRY/frontend:$IMAGE_TAG
 
-      - name: Frontend test
-        run: docker compose run frontend-test
+          docker build -t $DESTINATION -f ./frontend/Dockerfile ./frontend
+          docker push $DESTINATION
+
+      - name: Build, tag, and push image to Yandex Cloud Container Registry [Backend]
+        env:
+          CR_REGISTRY: crpqppq44fvldj2f1brc
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          DESTINATION=cr.yandex/$CR_REGISTRY/backend:$IMAGE_TAG
+
+          docker build -t $DESTINATION -f ./backend/Dockerfile ./backend
+          docker push $DESTINATION
 
       - name: Cleanup
         if: always()
