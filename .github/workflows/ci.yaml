@@ -1,5 +1,9 @@
 name: CI
 
+env:
+  FRONTEND_IMAGE: cr.yandex/${{ vars.CR_REGISTRY }}/frontend:${{ github.sha }}
+  BACKEND_IMAGE: cr.yandex/${{ vars.CR_REGISTRY }}/backend:${{ github.sha }}
+
 on:
   push:
     branches:
@@ -21,27 +25,34 @@ jobs:
         uses: yc-actions/yc-cr-login@v1
         with:
           yc-sa-json-credentials: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+      
+      - name: Build, tag, and push image to Yandex Cloud Container Registry [Backend]
+        run: |
+          docker build -t ${{ env.BACKEND_IMAGE }} -f ./backend/Dockerfile ./backend
+          docker push ${{ env.BACKEND_IMAGE }}
 
       - name: Build, tag, and push image to Yandex Cloud Container Registry [Frontend]
-        env:
-          CR_REGISTRY: crpqppq44fvldj2f1brc
-          IMAGE_TAG: ${{ github.sha }}
         run: |
-          DESTINATION=cr.yandex/$CR_REGISTRY/frontend:$IMAGE_TAG
+          docker build -t ${{ env.FRONTEND_IMAGE }} -f ./frontend/Dockerfile ./frontend
+          docker push ${{ env.FRONTEND_IMAGE }}
 
-          docker build -t $DESTINATION -f ./frontend/Dockerfile ./frontend
-          docker push $DESTINATION
-
-      - name: Build, tag, and push image to Yandex Cloud Container Registry [Backend]
+      - name: Deploy COI VM
+        id: deploy-coi
+        uses: yc-actions/yc-coi-deploy@v2
         env:
-          CR_REGISTRY: crpqppq44fvldj2f1brc
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          DESTINATION=cr.yandex/$CR_REGISTRY/backend:$IMAGE_TAG
-
-          docker build -t $DESTINATION -f ./backend/Dockerfile ./backend
-          docker push $DESTINATION
-
-      - name: Cleanup
-        if: always()
-        run: docker compose down
+          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}
+          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}
+          YC_VM_SSH: ${{ secrets.YC_VM_SSH }}
+          YC_VM_USERNAME: ${{ secrets.YC_VM_USERNAME }}
+        with:
+          yc-sa-json-credentials: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+          folder-id: ${{ vars.FOLDER_ID }}
+          vm-name: microservices
+          vm-service-account-id: ${{ vars.SERVICE_ACCOUNT_ID }}
+          vm-cores: 2
+          vm-memory: 2Gb
+          vm-core-fraction: 20
+          vm-disk-size: 15Gb
+          vm-subnet-id: ${{ vars.SUBNET_ID }}
+          user-data-path: './user-data.yaml'
+          docker-compose-path: './compose.yaml'
