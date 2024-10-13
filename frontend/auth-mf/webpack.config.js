@@ -46,7 +46,12 @@ module.exports = {
     new ModuleFederationPlugin({
       name: 'auth_mf',
       filename: 'remoteEntry.js',
-      exposes: {},
+      exposes: {
+        './Login': './src/components/Login.js',
+        './Logout': './src/components/Logout.js',
+        './Register': './src/components/Register.js',
+        './hooks': './src/hooks/index.js',
+      },
       shared: {
         ...deps,
         react: {
@@ -56,6 +61,10 @@ module.exports = {
         'react-dom': {
           singleton: true,
           requiredVersion: deps['react-dom'],
+        },
+        'react-router-dom': {
+          singleton: true,
+          requiredVersion: deps['react-router-dom'],
         },
       },
     }),
