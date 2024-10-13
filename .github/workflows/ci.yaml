@@ -1,5 +1,9 @@
 name: CI
 
+env:
+  FRONTEND_IMAGE: cr.yandex/${{ vars.CR_REGISTRY }}/frontend:${{ github.sha }}
+  BACKEND_IMAGE: cr.yandex/${{ vars.CR_REGISTRY }}/backend:${{ github.sha }}
+
 on:
   push:
     branches:
@@ -16,20 +20,39 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build docker containers
-        uses: docker/bake-action@v3
+      - name: Login to Yandex Cloud Container Registry
+        id: login-cr
+        uses: yc-actions/yc-cr-login@v1
         with:
-          load: true
+          yc-sa-json-credentials: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+      
+      - name: Build, tag, and push image to Yandex Cloud Container Registry [Backend]
+        run: |
+          docker build -t ${{ env.BACKEND_IMAGE }} -f ./backend/Dockerfile ./backend
+          docker push ${{ env.BACKEND_IMAGE }}
 
-      - name: Backend test
-        run: docker compose run backend-test
+      - name: Build, tag, and push image to Yandex Cloud Container Registry [Frontend]
+        run: |
+          docker build -t ${{ env.FRONTEND_IMAGE }} -f ./frontend/Dockerfile ./frontend
+          docker push ${{ env.FRONTEND_IMAGE }}
 
-      - name: Frontend test
-        run: docker compose run frontend-test
-
-      - name: Cleanup
-        if: always()
-        run: docker compose down
+      - name: Deploy COI VM
+        id: deploy-coi
+        uses: yc-actions/yc-coi-deploy@v2
+        env:
+          BACKEND_IMAGE: ${{ env.BACKEND_IMAGE }}
+          FRONTEND_IMAGE: ${{ env.FRONTEND_IMAGE }}
+          YC_VM_SSH: ${{ secrets.YC_VM_SSH }}
+          YC_VM_USERNAME: ${{ secrets.YC_VM_USERNAME }}
+        with:
+          yc-sa-json-credentials: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+          folder-id: ${{ vars.FOLDER_ID }}
+          vm-name: microservices
+          vm-service-account-id: ${{ vars.SERVICE_ACCOUNT_ID }}
+          vm-cores: 2
+          vm-memory: 2Gb
+          vm-core-fraction: 20
+          vm-disk-size: 15Gb
+          vm-subnet-id: ${{ vars.SUBNET_ID }}
+          user-data-path: './user-data.yaml'
+          docker-compose-path: './compose.yaml'

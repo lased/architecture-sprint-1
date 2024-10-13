@@ -1,21 +1,18 @@
 services:
-
   mongo:
     image: mongo
     restart: always
     logging:
       driver: none
     healthcheck:
-      test:  echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
       interval: 10s
       timeout: 10s
       retries: 5
       start_period: 10s
 
   backend-test:
-    build:
-      context: backend
-      dockerfile: ../Dockerfile.backend
+    image: {{ env.BACKEND_IMAGE }}
     environment:
       DB_ADDRESS: mongodb://mongo:27017/mestodb
     command: npm run lint
@@ -25,9 +22,7 @@ services:
         condition: service_healthy
 
   backend:
-    build:
-      context: backend
-      dockerfile: ../Dockerfile.backend
+    image: {{ env.BACKEND_IMAGE }}
     environment:
       DB_ADDRESS: mongodb://mongo:27017/mestodb
     depends_on:
@@ -37,26 +32,22 @@ services:
       - 3001:3000
     healthcheck:
       interval: 10s
-      timeout: 2s 
-      start_period: 15s 
-      retries: 5 
+      timeout: 2s
+      start_period: 15s
+      retries: 5
       test: node healthcheck.js
 
   frontend-test:
-    build:
-      context: frontend
-      dockerfile: ../Dockerfile.frontend
+    image: {{ env.FRONTEND_IMAGE }}
     command: yarn test:microfrontend
     restart: 'no'
     environment:
-          CI: true
+      CI: true
 
   frontend:
-    build:
-      context: frontend
-      dockerfile: ../Dockerfile.frontend
+    image: {{ env.FRONTEND_IMAGE }}
     ports:
-      - 3000:3000
+      - 80:3000
     depends_on:
       backend:
         condition: service_healthy
